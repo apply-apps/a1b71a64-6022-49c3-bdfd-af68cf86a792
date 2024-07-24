@@ -3,29 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { SafeAreaView, StyleSheet, Text, ScrollView, Button, View, TextInput, ActivityIndicator } from 'react-native';
-import axios from 'axios';
-
-const App = () => {
-    const [currentScreen, setCurrentScreen] = useState('home');
-
-    const navigateTo = (screen) => {
-        setCurrentScreen(screen);
-    };
-
-    return (
-        <SafeAreaView style={styles.container}>
-            <Text style={styles.title}>Workout Tracker App</Text>
-            <Button title="Weekly Workout Plan" onPress={() => navigateTo('plan')} />
-            <Button title="Workout History" onPress={() => navigateTo('history')} />
-            <Button title="Current Workout" onPress={() => navigateTo('currentWorkout')} />
-            <ScrollView>
-                {currentScreen === 'plan' && <WeeklyWorkoutPlan />}
-                {currentScreen === 'history' && <WorkoutHistory />}
-                {currentScreen === 'currentWorkout' && <CurrentWorkout />}
-            </ScrollView>
-        </SafeAreaView>
-    );
-};
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const WeeklyWorkoutPlan = () => {
     const [workoutPlan, setWorkoutPlan] = useState([]);
@@ -41,23 +19,23 @@ const WeeklyWorkoutPlan = () => {
     };
 
     return (
-        <View style={styles.weeklyContainer}>
-            <Text style={styles.header}>Weekly Workout Plan</Text>
+        <View style={planStyles.container}>
+            <Text style={planStyles.header}>Weekly Workout Plan</Text>
             <TextInput
-                style={styles.input}
+                style={planStyles.input}
                 placeholder="Exercise"
                 value={exercise}
                 onChangeText={setExercise}
             />
             <TextInput
-                style={styles.input}
+                style={planStyles.input}
                 placeholder="Sets"
                 value={sets}
                 onChangeText={setSets}
                 keyboardType="numeric"
             />
             <TextInput
-                style={styles.input}
+                style={planStyles.input}
                 placeholder="Reps"
                 value={reps}
                 onChangeText={setReps}
@@ -65,7 +43,7 @@ const WeeklyWorkoutPlan = () => {
             />
             <Button title="Add Exercise" onPress={addExercise} />
             {workoutPlan.map((item, index) => (
-                <View key={index} style={styles.planItem}>
+                <View key={index} style={planStyles.planItem}>
                     <Text>{item.exercise} - {item.sets} sets of {item.reps} reps</Text>
                 </View>
             ))}
@@ -73,28 +51,49 @@ const WeeklyWorkoutPlan = () => {
     );
 };
 
+const planStyles = StyleSheet.create({
+    container: {
+        padding: 10,
+        backgroundColor: '#F5F5F5',
+    },
+    header: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginBottom: 10,
+    },
+    input: {
+        marginBottom: 10,
+        padding: 10,
+        borderWidth: 1,
+        borderColor: '#CCCCCC',
+        borderRadius: 5,
+    },
+    planItem: {
+        padding: 10,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 5,
+        marginVertical: 5,
+    },
+});
+
 const WorkoutHistory = () => {
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const fetchHistory = async () => {
-            try {
-                const response = await axios.post('http://apihub.p.appply.xyz:3300/chatgpt', {
-                    messages: [
-                        { role: "system", content: "You are a helpful assistant. Please provide the workout history." },
-                        { role: "user", content: "Show me my workout history." }
-                    ],
-                    model: "gpt-4o"
-                });
-                setHistory(response.data.response.split('\n'));
-                setLoading(false);
-            } catch (error) {
-                console.error("Error fetching workout history: ", error);
-                setLoading(false);
+    const fetchHistory = async () => {
+        try {
+            const savedHistory = await AsyncStorage.getItem('workoutHistory');
+            if (savedHistory !== null) {
+                setHistory(JSON.parse(savedHistory));
             }
-        };
+            setLoading(false);
+        } catch (error) {
+            console.error("Error fetching workout history: ", error);
+            setLoading(false);
+        }
+    };
 
+    useEffect(() => {
         fetchHistory();
     }, []);
 
@@ -103,16 +102,34 @@ const WorkoutHistory = () => {
     }
 
     return (
-        <View style={styles.historyContainer}>
-            <Text style={styles.header}>Workout History</Text>
+        <View style={historyStyles.container}>
+            <Text style={historyStyles.header}>Workout History</Text>
             {history.map((workout, index) => (
-                <View key={index} style={styles.historyItem}>
+                <View key={index} style={historyStyles.historyItem}>
                     <Text>{workout}</Text>
                 </View>
             ))}
         </View>
     );
 };
+
+const historyStyles = StyleSheet.create({
+    container: {
+        padding: 10,
+        backgroundColor: '#F5F5F5',
+    },
+    header: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginBottom: 10,
+    },
+    historyItem: {
+        padding: 10,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 5,
+        marginVertical: 5,
+    },
+});
 
 const CurrentWorkout = () => {
     const [currentWorkout, setCurrentWorkout] = useState([]);
@@ -123,9 +140,13 @@ const CurrentWorkout = () => {
         setCurrentWorkout([]);
     };
 
-    const endWorkout = () => {
+    const endWorkout = async () => {
         setWorkoutActive(false);
-        // Save the workout to history if needed
+        const savedHistory = await AsyncStorage.getItem('workoutHistory');
+        const history = savedHistory ? JSON.parse(savedHistory) : [];
+        history.push(currentWorkout);
+        await AsyncStorage.setItem('workoutHistory', JSON.stringify(history));
+        setCurrentWorkout([]);
     };
 
     const addCompletedExercise = (exercise) => {
@@ -133,8 +154,8 @@ const CurrentWorkout = () => {
     };
 
     return (
-        <View style={styles.currentContainer}>
-            <Text style={styles.header}>Current Workout</Text>
+        <View style={currentWorkoutStyles.container}>
+            <Text style={currentWorkoutStyles.header}>Current Workout</Text>
             {!workoutActive ? (
                 <Button title="Start Workout" onPress={startWorkout} />
             ) : (
@@ -142,7 +163,7 @@ const CurrentWorkout = () => {
                     <Button title="End Workout" onPress={endWorkout} />
                     <CompletedExerciseForm onSave={addCompletedExercise} />
                     {currentWorkout.map((item, index) => (
-                        <View key={index} style={styles.workoutItem}>
+                        <View key={index} style={currentWorkoutStyles.workoutItem}>
                             <Text>{item}</Text>
                         </View>
                     ))}
@@ -167,22 +188,22 @@ const CompletedExerciseForm = ({ onSave }) => {
     };
 
     return (
-        <View style={styles.form}>
+        <View style={currentWorkoutStyles.form}>
             <TextInput
-                style={styles.input}
+                style={currentWorkoutStyles.input}
                 placeholder="Exercise"
                 value={exercise}
                 onChangeText={setExercise}
             />
             <TextInput
-                style={styles.input}
+                style={currentWorkoutStyles.input}
                 placeholder="Sets"
                 value={sets}
                 onChangeText={setSets}
                 keyboardType="numeric"
             />
             <TextInput
-                style={styles.input}
+                style={currentWorkoutStyles.input}
                 placeholder="Reps"
                 value={reps}
                 onChangeText={setReps}
@@ -193,7 +214,57 @@ const CompletedExerciseForm = ({ onSave }) => {
     );
 };
 
-const styles = StyleSheet.create({
+const currentWorkoutStyles = StyleSheet.create({
+    container: {
+        padding: 10,
+        backgroundColor: '#F5F5F5',
+    },
+    header: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginBottom: 10,
+    },
+    form: {
+        marginBottom: 20,
+    },
+    input: {
+        marginBottom: 10,
+        padding: 10,
+        borderWidth: 1,
+        borderColor: '#CCCCCC',
+        borderRadius: 5,
+    },
+    workoutItem: {
+        padding: 10,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 5,
+        marginVertical: 5,
+    },
+});
+
+export default function App() {
+    const [currentScreen, setCurrentScreen] = useState('home');
+
+    const navigateTo = (screen) => {
+        setCurrentScreen(screen);
+    };
+
+    return (
+        <SafeAreaView style={appStyles.container}>
+            <Text style={appStyles.title}>Workout Tracker App</Text>
+            <Button title="Weekly Workout Plan" onPress={() => navigateTo('plan')} />
+            <Button title="Workout History" onPress={() => navigateTo('history')} />
+            <Button title="Current Workout" onPress={() => navigateTo('currentWorkout')} />
+            <ScrollView>
+                {currentScreen === 'plan' && <WeeklyWorkoutPlan />}
+                {currentScreen === 'history' && <WorkoutHistory />}
+                {currentScreen === 'currentWorkout' && <CurrentWorkout />}
+            </ScrollView>
+        </SafeAreaView>
+    );
+}
+
+const appStyles = StyleSheet.create({
     container: {
         paddingTop: 20,
         padding: 10,
@@ -206,51 +277,4 @@ const styles = StyleSheet.create({
         marginBottom: 20,
         textAlign: 'center',
     },
-    weeklyContainer: {
-        padding: 10,
-        backgroundColor: '#F5F5F5',
-    },
-    header: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginBottom: 10,
-    },
-    input: {
-        marginBottom: 10,
-        padding: 10,
-        borderWidth: 1,
-        borderColor: '#CCCCCC',
-        borderRadius: 5,
-    },
-    planItem: {
-        padding: 10,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 5,
-        marginVertical: 5,
-    },
-    historyContainer: {
-        padding: 10,
-        backgroundColor: '#F5F5F5',
-    },
-    historyItem: {
-        padding: 10,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 5,
-        marginVertical: 5,
-    },
-    currentContainer: {
-        padding: 10,
-        backgroundColor: '#F5F5F5',
-    },
-    form: {
-        marginBottom: 20,
-    },
-    workoutItem: {
-        padding: 10,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 5,
-        marginVertical: 5,
-    },
 });
-
-export default App;
